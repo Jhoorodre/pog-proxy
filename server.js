@@ -1,23 +1,27 @@
 const http = require('node:http');
 const { performance } = require('node:perf_hooks');
-const corsProxyModule = require('@isomorphic-git/cors-proxy');
 
-const PORT = Number(process.env.PORT || 3000);
-const ALLOW_ORIGIN = process.env.ALLOW_ORIGIN || 'https://jhoorodre.github.io';
+const DEFAULT_PORT = 3000;
+const DEFAULT_ALLOW_ORIGIN = 'https://jhoorodre.github.io';
 
-const proxyHandler =
-  (typeof corsProxyModule === 'function' && corsProxyModule) ||
-  corsProxyModule.corsProxy ||
-  corsProxyModule.default;
-
-if (typeof proxyHandler !== 'function') {
-  throw new Error('Não foi possível carregar o handler do @isomorphic-git/cors-proxy.');
+function loadProxyHandler() {
+  try {
+    const corsProxyModule = require('@isomorphic-git/cors-proxy');
+    return (
+      (typeof corsProxyModule === 'function' && corsProxyModule) ||
+      corsProxyModule.corsProxy ||
+      corsProxyModule.default ||
+      null
+    );
+  } catch {
+    return null;
+  }
 }
 
-function setCorsHeaders(req, res) {
+function setCorsHeaders(req, res, allowOrigin) {
   const origin = req.headers.origin;
 
-  if (origin && origin === ALLOW_ORIGIN) {
+  if (origin && origin === allowOrigin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Credentials', 'false');
@@ -27,46 +31,83 @@ function setCorsHeaders(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
-function isAllowedOrigin(origin) {
-  return !origin || origin === ALLOW_ORIGIN;
+function isAllowedOrigin(origin, allowOrigin) {
+  return !origin || origin === allowOrigin;
 }
 
-const server = http.createServer((req, res) => {
-  const start = performance.now();
+function createServer({
+  allowOrigin = process.env.ALLOW_ORIGIN || DEFAULT_ALLOW_ORIGIN,
+  proxyHandler = loadProxyHandler(),
+  logger = console,
+} = {}) {
+  return http.createServer((req, res) => {
+    const start = performance.now();
 
-  const endResponse = () => {
-    const durationMs = (performance.now() - start).toFixed(1);
-    console.log(`${req.method} ${req.url} -> ${res.statusCode} (${durationMs}ms)`);
-  };
+    res.on('finish', () => {
+      const durationMs = (performance.now() - start).toFixed(1);
+      logger.log(`${req.method} ${req.url} -> ${res.statusCode} (${durationMs}ms)`);
+    });
 
-  res.on('finish', endResponse);
+    setCorsHeaders(req, res, allowOrigin);
 
-  setCorsHeaders(req, res);
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
 
-  if (req.method === 'OPTIONS') {
-    res.statusCode = 204;
-    res.end();
-    return;
-  }
+    if (!isAllowedOrigin(req.headers.origin, allowOrigin)) {
+      res.statusCode = 403;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ ok: false, error: 'origin_not_allowed' }));
+      return;
+    }
 
-  if (!isAllowedOrigin(req.headers.origin)) {
-    res.statusCode = 403;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify({ ok: false, error: 'origin_not_allowed' }));
-    return;
-  }
+    if (req.url === '/healthz' && req.method === 'GET') {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
 
-  if (req.url === '/healthz' && req.method === 'GET') {
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify({ ok: true }));
-    return;
-  }
+    if (typeof proxyHandler !== 'function') {
+      res.statusCode = 503;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(
+        JSON.stringify({
+          ok: false,
+          error: 'proxy_dependency_unavailable',
+          message: 'Dependência @isomorphic-git/cors-proxy não encontrada no ambiente.',
+        })
+      );
+      return;
+    }
 
-  proxyHandler(req, res);
-});
+    proxyHandler(req, res);
+  });
+}
 
-server.listen(PORT, () => {
-  console.log(`facaccimo-cors-proxy rodando na porta ${PORT}`);
-  console.log(`ALLOW_ORIGIN: ${ALLOW_ORIGIN}`);
-});
+function startServer() {
+  const port = Number(process.env.PORT || DEFAULT_PORT);
+  const allowOrigin = process.env.ALLOW_ORIGIN || DEFAULT_ALLOW_ORIGIN;
+  const server = createServer({ allowOrigin });
+
+  server.listen(port, () => {
+    console.log(`facaccimo-cors-proxy rodando na porta ${port}`);
+    console.log(`ALLOW_ORIGIN: ${allowOrigin}`);
+  });
+
+  return server;
+}
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = {
+  createServer,
+  isAllowedOrigin,
+  loadProxyHandler,
+  setCorsHeaders,
+  startServer,
+};

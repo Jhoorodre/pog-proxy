@@ -18,7 +18,12 @@ npm install
 npm run dev
 ```
 
-## Testes rápidos
+## Scripts
+- `npm run dev`: sobe o servidor
+- `npm start`: sobe o servidor
+- `npm test`: executa testes automatizados do servidor
+
+## Testes rápidos (manual)
 ### Healthcheck
 ```bash
 curl -i http://localhost:3000/healthz
@@ -33,6 +38,8 @@ curl -i http://localhost:3000/https://github.com/
 
 Resposta esperada: status `200` (ou redirect HTTP do destino), sem erro de CORS quando usado pela origem permitida.
 
+> Se a dependência `@isomorphic-git/cors-proxy` não estiver instalada no ambiente, a rota de proxy responderá `503` com erro `proxy_dependency_unavailable`.
+
 ## Deploy
 
 ### Heroku (recomendado)
@@ -44,13 +51,12 @@ Resposta esperada: status `200` (ou redirect HTTP do destino), sem erro de CORS 
    ```bash
    heroku config:set ALLOW_ORIGIN=https://jhoorodre.github.io
    ```
-3. Faça deploy:
+3. Faça deploy (ajuste a branch local se não usar `main`):
    ```bash
    git push heroku main
    ```
 4. Verifique:
    ```bash
-   heroku open
    curl -i https://SEU_APP.herokuapp.com/healthz
    ```
 

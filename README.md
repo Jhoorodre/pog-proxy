@@ -13,6 +13,11 @@ Copie o `.env.example` e ajuste se necessário.
 - `ALLOW_ORIGIN`: uma ou mais origens autorizadas (separadas por vírgula). Padrão `https://jhoorodre.github.io`
 - `ALLOW_NO_ORIGIN`: permite requests sem header `Origin` (padrão `false`, recomendado para produção manter `false`)
 
+## Rotas
+- `GET /healthz` → healthcheck (`{ "ok": true }`)
+- `/<http(s)://...>` → rota de proxy
+- qualquer outra rota → `404` com `{ "error": "route_not_found" }`
+
 ## Rodando local
 ```bash
 npm install

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const { createServer, parseAllowedOrigins } = require('../server');
+const { createServer, parseAllowedOrigins, isProxyPath } = require('../server');
 
 async function request(port, path, { method = 'GET', headers = {} } = {}) {
   return new Promise((resolve, reject) => {
@@ -25,6 +25,14 @@ async function request(port, path, { method = 'GET', headers = {} } = {}) {
 test('parseAllowedOrigins aceita múltiplas origens separadas por vírgula', () => {
   const parsed = parseAllowedOrigins('https://a.com, https://b.com');
   assert.deepEqual(parsed, ['https://a.com', 'https://b.com']);
+});
+
+
+test('isProxyPath valida rotas no formato /http(s)://', () => {
+  assert.equal(isProxyPath('/https://github.com/'), true);
+  assert.equal(isProxyPath('/http://github.com/'), true);
+  assert.equal(isProxyPath('/healthz'), false);
+  assert.equal(isProxyPath('/'), false);
 });
 
 test('GET /healthz retorna 200 e { ok: true }', async () => {
@@ -116,6 +124,26 @@ test('aceita múltiplas origens permitidas', async () => {
   }
 });
 
+
+test('rota fora do formato de proxy retorna 404', async () => {
+  const server = createServer({
+    allowedOrigins: ['https://jhoorodre.github.io'],
+    proxyHandler: () => {},
+  });
+  await new Promise((resolve) => server.listen(0, resolve));
+  const { port } = server.address();
+
+  try {
+    const res = await request(port, '/nao-existe', {
+      headers: { origin: 'https://jhoorodre.github.io' },
+    });
+    assert.equal(res.status, 404);
+    assert.match(res.body, /route_not_found/);
+  } finally {
+    server.close();
+  }
+});
+
 test('sem dependência de proxy, rota de proxy retorna 503', async () => {
   const server = createServer({
     allowedOrigins: ['https://jhoorodre.github.io'],
@@ -163,6 +191,29 @@ test('retorna 502 quando proxyHandler lança exceção', async () => {
     allowedOrigins: ['https://jhoorodre.github.io'],
     proxyHandler: () => {
       throw new Error('boom');
+    },
+    logger: { log: () => {}, error: () => {} },
+  });
+  await new Promise((resolve) => server.listen(0, resolve));
+  const { port } = server.address();
+
+  try {
+    const res = await request(port, '/https://github.com/', {
+      headers: { origin: 'https://jhoorodre.github.io' },
+    });
+    assert.equal(res.status, 502);
+    assert.match(res.body, /upstream_proxy_error/);
+  } finally {
+    server.close();
+  }
+});
+
+
+test('retorna 502 quando proxyHandler rejeita Promise', async () => {
+  const server = createServer({
+    allowedOrigins: ['https://jhoorodre.github.io'],
+    proxyHandler: async () => {
+      throw new Error('async boom');
     },
     logger: { log: () => {}, error: () => {} },
   });

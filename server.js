@@ -51,6 +51,11 @@ function isAllowedOrigin(origin, allowedOrigins, allowNoOrigin) {
   return allowedOrigins.includes(origin);
 }
 
+
+function isProxyPath(url) {
+  return typeof url === 'string' && (url.startsWith('/https://') || url.startsWith('/http://'));
+}
+
 function createServer({
   allowedOrigins = parseAllowedOrigins(process.env.ALLOW_ORIGIN),
   allowNoOrigin = parseAllowNoOrigin(process.env.ALLOW_NO_ORIGIN ?? DEFAULT_ALLOW_NO_ORIGIN),
@@ -94,6 +99,13 @@ function createServer({
       return;
     }
 
+    if (!isProxyPath(req.url)) {
+      res.statusCode = 404;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ ok: false, error: 'route_not_found' }));
+      return;
+    }
+
     if (typeof proxyHandler !== 'function') {
       res.statusCode = 503;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -107,9 +119,7 @@ function createServer({
       return;
     }
 
-    try {
-      proxyHandler(req, res);
-    } catch (error) {
+    const handleProxyError = (error) => {
       logger.error(`proxy handler error: ${error && error.message ? error.message : error}`);
       if (!res.headersSent) {
         res.statusCode = 502;
@@ -118,6 +128,15 @@ function createServer({
       if (!res.writableEnded) {
         res.end(JSON.stringify({ ok: false, error: 'upstream_proxy_error' }));
       }
+    };
+
+    try {
+      const maybePromise = proxyHandler(req, res);
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        maybePromise.catch(handleProxyError);
+      }
+    } catch (error) {
+      handleProxyError(error);
     }
   });
 }
@@ -144,6 +163,7 @@ if (require.main === module) {
 module.exports = {
   createServer,
   isAllowedOrigin,
+  isProxyPath,
   loadProxyHandler,
   parseAllowedOrigins,
   parseAllowNoOrigin,

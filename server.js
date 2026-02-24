@@ -3,6 +3,7 @@ const { performance } = require('node:perf_hooks');
 
 const DEFAULT_PORT = 3000;
 const DEFAULT_ALLOW_ORIGIN = 'https://jhoorodre.github.io';
+const DEFAULT_ALLOW_NO_ORIGIN = false;
 
 function loadProxyHandler() {
   try {
@@ -18,10 +19,21 @@ function loadProxyHandler() {
   }
 }
 
-function setCorsHeaders(req, res, allowOrigin) {
+function parseAllowedOrigins(raw) {
+  return String(raw || DEFAULT_ALLOW_ORIGIN)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseAllowNoOrigin(raw) {
+  return String(raw).toLowerCase() === 'true';
+}
+
+function setCorsHeaders(req, res, allowedOrigins) {
   const origin = req.headers.origin;
 
-  if (origin && origin === allowOrigin) {
+  if (origin && allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Credentials', 'false');
@@ -31,12 +43,17 @@ function setCorsHeaders(req, res, allowOrigin) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Git-Protocol, X-Requested-With, Range');
 }
 
-function isAllowedOrigin(origin, allowOrigin) {
-  return !origin || origin === allowOrigin;
+function isAllowedOrigin(origin, allowedOrigins, allowNoOrigin) {
+  if (!origin) {
+    return allowNoOrigin;
+  }
+
+  return allowedOrigins.includes(origin);
 }
 
 function createServer({
-  allowOrigin = process.env.ALLOW_ORIGIN || DEFAULT_ALLOW_ORIGIN,
+  allowedOrigins = parseAllowedOrigins(process.env.ALLOW_ORIGIN),
+  allowNoOrigin = parseAllowNoOrigin(process.env.ALLOW_NO_ORIGIN ?? DEFAULT_ALLOW_NO_ORIGIN),
   proxyHandler = loadProxyHandler(),
   logger = console,
 } = {}) {
@@ -48,18 +65,18 @@ function createServer({
       logger.log(`${req.method} ${req.url} -> ${res.statusCode} (${durationMs}ms)`);
     });
 
-    setCorsHeaders(req, res, allowOrigin);
+    setCorsHeaders(req, res, allowedOrigins);
 
     if (req.method === 'OPTIONS') {
+      if (!isAllowedOrigin(req.headers.origin, allowedOrigins, allowNoOrigin)) {
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ ok: false, error: 'origin_not_allowed' }));
+        return;
+      }
+
       res.statusCode = 204;
       res.end();
-      return;
-    }
-
-    if (!isAllowedOrigin(req.headers.origin, allowOrigin)) {
-      res.statusCode = 403;
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(JSON.stringify({ ok: false, error: 'origin_not_allowed' }));
       return;
     }
 
@@ -67,6 +84,13 @@ function createServer({
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (!isAllowedOrigin(req.headers.origin, allowedOrigins, allowNoOrigin)) {
+      res.statusCode = 403;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ ok: false, error: 'origin_not_allowed' }));
       return;
     }
 
@@ -100,12 +124,14 @@ function createServer({
 
 function startServer() {
   const port = Number(process.env.PORT || DEFAULT_PORT);
-  const allowOrigin = process.env.ALLOW_ORIGIN || DEFAULT_ALLOW_ORIGIN;
-  const server = createServer({ allowOrigin });
+  const allowedOrigins = parseAllowedOrigins(process.env.ALLOW_ORIGIN);
+  const allowNoOrigin = parseAllowNoOrigin(process.env.ALLOW_NO_ORIGIN ?? DEFAULT_ALLOW_NO_ORIGIN);
+  const server = createServer({ allowedOrigins, allowNoOrigin });
 
   server.listen(port, () => {
     console.log(`facaccimo-cors-proxy rodando na porta ${port}`);
-    console.log(`ALLOW_ORIGIN: ${allowOrigin}`);
+    console.log(`ALLOW_ORIGIN: ${allowedOrigins.join(', ')}`);
+    console.log(`ALLOW_NO_ORIGIN: ${allowNoOrigin}`);
   });
 
   return server;
@@ -119,6 +145,8 @@ module.exports = {
   createServer,
   isAllowedOrigin,
   loadProxyHandler,
+  parseAllowedOrigins,
+  parseAllowNoOrigin,
   setCorsHeaders,
   startServer,
 };

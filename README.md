@@ -10,7 +10,8 @@ Proxy CORS em Node.js para uso com `isomorphic-git` no app facaccimo.
 Copie o `.env.example` e ajuste se necessário.
 
 - `PORT`: porta HTTP do serviço (padrão `3000`)
-- `ALLOW_ORIGIN`: origem autorizada para CORS (padrão `https://jhoorodre.github.io`)
+- `ALLOW_ORIGIN`: uma ou mais origens autorizadas (separadas por vírgula). Padrão `https://jhoorodre.github.io`
+- `ALLOW_NO_ORIGIN`: permite requests sem header `Origin` (padrão `false`, recomendado para produção manter `false`)
 
 ## Rodando local
 ```bash
@@ -36,7 +37,9 @@ Resposta esperada: status `200` com `{"ok":true}`.
 curl -i http://localhost:3000/https://github.com/
 ```
 
-Resposta esperada: status `200` (ou redirect HTTP do destino), sem erro de CORS quando usado pela origem permitida.
+Resposta esperada: status `200` (ou redirect HTTP do destino), sem erro de CORS quando usado por origem permitida.
+
+> Por padrão, requests sem header `Origin` para a rota de proxy retornam `403` para reduzir abuso. Se você precisar permitir tráfego server-to-server, configure `ALLOW_NO_ORIGIN=true`.
 
 > Se a dependência `@isomorphic-git/cors-proxy` não estiver instalada no ambiente, a rota de proxy responderá `503` com erro `proxy_dependency_unavailable`.
 

@@ -42,7 +42,7 @@ Resposta esperada: status `200` (ou redirect HTTP do destino), sem erro de CORS 
 
 ## Deploy
 
-### Heroku (recomendado)
+### Heroku
 1. Crie o app:
    ```bash
    heroku create SEU_APP
@@ -61,6 +61,7 @@ Resposta esperada: status `200` (ou redirect HTTP do destino), sem erro de CORS 
    ```
 
 > Este repositório inclui `Procfile` pronto para Heroku.
+> Observação: o plano gratuito do Heroku não é mais o caminho padrão; para começar sem custo, geralmente Render/Railway/Fly.io são mais práticos.
 
 ### Netlify
 Netlify Functions **não é o cenário ideal** para proxy HTTP contínuo (streaming, timeouts e cold start podem impactar Git operations). Para produção, prefira runtime Node contínuo em:

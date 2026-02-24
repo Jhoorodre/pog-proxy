@@ -28,7 +28,7 @@ function setCorsHeaders(req, res, allowOrigin) {
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Git-Protocol, X-Requested-With, Range');
 }
 
 function isAllowedOrigin(origin, allowOrigin) {
@@ -83,7 +83,18 @@ function createServer({
       return;
     }
 
-    proxyHandler(req, res);
+    try {
+      proxyHandler(req, res);
+    } catch (error) {
+      logger.error(`proxy handler error: ${error && error.message ? error.message : error}`);
+      if (!res.headersSent) {
+        res.statusCode = 502;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      }
+      if (!res.writableEnded) {
+        res.end(JSON.stringify({ ok: false, error: 'upstream_proxy_error' }));
+      }
+    }
   });
 }
 

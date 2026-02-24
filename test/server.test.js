@@ -66,3 +66,40 @@ test('sem dependência de proxy, rota de proxy retorna 503', async () => {
     server.close();
   }
 });
+
+
+test('responde headers CORS ampliados no preflight OPTIONS', async () => {
+  const server = createServer({ proxyHandler: () => {} });
+  await new Promise((resolve) => server.listen(0, resolve));
+  const { port } = server.address();
+
+  try {
+    const res = await request(port, '/https://github.com/', { method: 'OPTIONS' });
+    assert.equal(res.status, 204);
+    assert.equal(
+      res.headers['access-control-allow-headers'],
+      'Content-Type, Authorization, Git-Protocol, X-Requested-With, Range'
+    );
+  } finally {
+    server.close();
+  }
+});
+
+test('retorna 502 quando proxyHandler lança exceção', async () => {
+  const server = createServer({
+    proxyHandler: () => {
+      throw new Error('boom');
+    },
+    logger: { log: () => {}, error: () => {} },
+  });
+  await new Promise((resolve) => server.listen(0, resolve));
+  const { port } = server.address();
+
+  try {
+    const res = await request(port, '/https://github.com/');
+    assert.equal(res.status, 502);
+    assert.match(res.body, /upstream_proxy_error/);
+  } finally {
+    server.close();
+  }
+});

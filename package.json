@@ -1,0 +1,25 @@
+{
+  "name": "facaccimo-cors-proxy",
+  "version": "1.0.0",
+  "description": "CORS proxy compatível com isomorphic-git para o facaccimo.",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "cors",
+    "proxy",
+    "isomorphic-git"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@isomorphic-git/cors-proxy": "^2.0.3"
+  }
+}
